@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # SMSML CalebAnthony Project
 
 Project ini adalah implementasi end-to-end Machine Learning pipeline untuk prediksi Churn Nasabah kartu kredit. Project ini mencakup tahapan Ingestion data, Preprocessing otomatis, Exploratory Data Analysis (EDA) yang komprehensif, Modeling dengan Deep Learning (TensorFlow), dan integrasi CI/CD dengan GitHub Actions serta MLflow.
@@ -79,3 +80,6 @@ Project ini dilengkapi dengan GitHub Actions workflow (`.github/workflows/main.y
 -   **Matplotlib & Seaborn**: Data Visualization
 -   **MLflow**: Experiment Tracking
 -   **GitHub Actions**: CI Automation
+=======
+# SMSML_CalebAnthony
+>>>>>>> 3ab07050e90340e24e8e20c4f8ba67667770197c

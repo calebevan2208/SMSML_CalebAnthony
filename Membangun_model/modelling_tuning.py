@@ -92,7 +92,7 @@ class ChurnTuner:
         TuningConfig.ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
         
         # Setup MLflow
-        dagshub.init(repo_owner='iamikhsank', repo_name='SMSML_CalebAnthony', mlflow=True)
+        dagshub.init(repo_owner='calebevan2208', repo_name='SMSML_CalebAnthony', mlflow=True)
         mlflow.set_experiment(TuningConfig.EXPERIMENT_NAME)
         logger.info(f"MLflow Experiment set to: {TuningConfig.EXPERIMENT_NAME}")
 
