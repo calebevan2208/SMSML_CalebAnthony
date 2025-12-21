@@ -10,6 +10,7 @@ Features:
 - MLflow Tracking (Params, Metrics, Artifacts).
 - Prevention of Data Leakage (Split-then-Scale).
 - Automatic Best Model Selection.
+- Imbalanced Data Handling (SMOTE + Class Weights).
 
 Environment: Python 3.12.7 | MLflow 2.19.0
 Author: Caleb Anthony (Automated by System)
@@ -33,6 +34,8 @@ from itertools import product
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.utils.class_weight import compute_class_weight
+from imblearn.over_sampling import SMOTE
 
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, BatchNormalization
@@ -126,6 +129,11 @@ class ChurnTuner:
         self.X_train = self.scaler.fit_transform(self.X_train)
         self.X_test = self.scaler.transform(self.X_test)
         
+        # Apply SMOTE
+        logger.info("Menerapkan SMOTE...")
+        smote = SMOTE(random_state=TuningConfig.RANDOM_STATE)
+        self.X_train, self.y_train = smote.fit_resample(self.X_train, self.y_train)
+        
         # Simpan Scaler untuk Production
         scaler_path = TuningConfig.ARTIFACTS_DIR / 'scaler_production.pkl'
         joblib.dump(self.scaler, scaler_path)
@@ -154,7 +162,11 @@ class ChurnTuner:
         model.compile(
             optimizer=optimizer,
             loss='binary_crossentropy',
-            metrics=['accuracy']
+            metrics=[
+                'accuracy', 
+                tf.keras.metrics.AUC(name='auc'),
+                tf.keras.metrics.Recall(name='recall')
+            ]
         )
         return model
 
@@ -185,12 +197,21 @@ class ChurnTuner:
                 
                 early_stop = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
                 
+                # Class Weights (Stabilization)
+                class_weights = compute_class_weight(
+                    class_weight='balanced',
+                    classes=np.unique(self.y_train),
+                    y=self.y_train
+                )
+                class_weight_dict = dict(enumerate(class_weights))
+                
                 history = model.fit(
                     self.X_train, self.y_train,
                     validation_data=(self.X_test, self.y_test),
                     epochs=TuningConfig.EPOCHS,
                     batch_size=params['batch_size'],
                     callbacks=[early_stop],
+                    class_weight=class_weight_dict,
                     verbose=0 # Silent training agar log tidak penuh
                 )
                 
@@ -202,14 +223,16 @@ class ChurnTuner:
                 acc = accuracy_score(self.y_test, y_pred)
                 f1 = f1_score(self.y_test, y_pred, zero_division=0)
                 auc = roc_auc_score(self.y_test, y_pred_prob)
+                rec = recall_score(self.y_test, y_pred, zero_division=0)
                 
-                logger.info(f"   Result -> Accuracy: {acc:.4f}, F1: {f1:.4f}, AUC: {auc:.4f}")
+                logger.info(f"   Result -> Acc: {acc:.4f}, F1: {f1:.4f}, AUC: {auc:.4f}, Recall: {rec:.4f}")
                 
                 # 4. Log Metrics to MLflow
                 mlflow.log_metrics({
                     "test_accuracy": acc,
                     "test_f1_score": f1,
                     "test_auc": auc,
+                    "test_recall": rec,
                     "final_train_loss": history.history['loss'][-1],
                     "final_val_loss": history.history['val_loss'][-1]
                 })
@@ -218,11 +241,12 @@ class ChurnTuner:
                 # MLflow 2.19+ supports logging tensorflow/keras models directly
                 mlflow.tensorflow.log_model(model, "model")
                 
-                # 6. Best Model Tracking Logic
-                if acc > self.best_accuracy:
-                    self.best_accuracy = acc
+                # 6. Best Model Tracking Logic (Changed to F1-Score)
+                # Menggunakan F1-Score sebagai metric utama untuk seleksi model
+                if f1 > self.best_accuracy: # Variable name is best_accuracy but used for best score
+                    self.best_accuracy = f1
                     self.best_model = model
-                    logger.info(f"   >>> New Best Model Found! (Acc: {acc:.4f})")
+                    logger.info(f"   >>> New Best Model Found! (F1-Score: {f1:.4f})")
                     
                     # Simpan 'Best Model' secara lokal untuk kemudahan akses deployment
                     best_model_path = TuningConfig.ARTIFACTS_DIR / 'best_churn_model.h5'
@@ -233,7 +257,7 @@ class ChurnTuner:
         """Final summary."""
         logger.info("="*50)
         logger.info("TUNING COMPLETED")
-        logger.info(f"Best Accuracy achieved: {self.best_accuracy:.4f}")
+        logger.info(f"Best Score (F1) achieved: {self.best_accuracy:.4f}")
         logger.info(f"Check MLflow UI for details. Run: 'mlflow ui'")
         logger.info("="*50)
 

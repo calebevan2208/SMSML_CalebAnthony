@@ -9,6 +9,7 @@ Fitur Utama:
 2. Early Stopping untuk mencegah Overfitting dan menghemat waktu komputasi.
 3. Penyimpanan Artifacts (Model .h5 & Scaler .pkl) untuk deployment.
 4. Visualisasi Learning Curve (Loss & Accuracy).
+5. Penanganan Imbalanced Data (SMOTE + Class Weights).
 
 Author: Caleb Anthony (Automated by System)
 Date: 2025-10-30
@@ -30,6 +31,8 @@ from typing import Tuple, Optional
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
+from sklearn.utils.class_weight import compute_class_weight
+from imblearn.over_sampling import SMOTE
 
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, BatchNormalization
@@ -122,6 +125,12 @@ class ChurnBaselineTrainer:
         self.X_train = self.scaler.fit_transform(self.X_train)
         self.X_test = self.scaler.transform(self.X_test)
         
+        # Apply SMOTE to Training Data (Handle Imbalance)
+        logger.info("Menerapkan SMOTE untuk menangani Imbalanced Data...")
+        smote = SMOTE(random_state=ModelConfig.RANDOM_STATE)
+        self.X_train, self.y_train = smote.fit_resample(self.X_train, self.y_train)
+        logger.info(f"Distribusi Target setelah SMOTE: {self.y_train.value_counts().to_dict()}")
+
         # Simpan Scaler (Penting untuk tahap Deployment/Serving nanti)
         joblib.dump(self.scaler, ModelConfig.SCALER_SAVE_PATH)
         logger.info(f"Scaler tersimpan di: {ModelConfig.SCALER_SAVE_PATH}")
@@ -153,14 +162,19 @@ class ChurnBaselineTrainer:
         self.model.compile(
             optimizer=optimizer,
             loss='binary_crossentropy', # Wajib untuk binary classification
-            metrics=['accuracy', tf.keras.metrics.AUC(name='auc')]
+            metrics=[
+                'accuracy', 
+                tf.keras.metrics.AUC(name='auc'),
+                tf.keras.metrics.Recall(name='recall'),
+                tf.keras.metrics.Precision(name='precision')
+            ]
         )
         
         self.model.summary(print_fn=logger.info)
 
     def train(self) -> None:
         """
-        Melatih model dengan Callbacks (EarlyStopping).
+        Melatih model dengan Callbacks (EarlyStopping) dan Class Weights.
         """
         if self.model is None:
             raise ValueError("Model belum dibangun. Jalankan build_model() dulu.")
@@ -175,12 +189,23 @@ class ChurnBaselineTrainer:
             ModelCheckpoint(filepath=str(ModelConfig.MODEL_SAVE_PATH), monitor='val_loss', save_best_only=True)
         ]
         
+        # Compute Class Weights
+        # Meskipun sudah pakai SMOTE, class weights tetap berguna untuk kestabilan loss
+        class_weights = compute_class_weight(
+            class_weight='balanced',
+            classes=np.unique(self.y_train),
+            y=self.y_train
+        )
+        class_weight_dict = dict(enumerate(class_weights))
+        logger.info(f"Class Weights digunakan: {class_weight_dict}")
+
         history = self.model.fit(
             self.X_train, self.y_train,
             validation_data=(self.X_test, self.y_test),
             epochs=ModelConfig.EPOCHS,
             batch_size=ModelConfig.BATCH_SIZE,
             callbacks=callbacks,
+            class_weight=class_weight_dict,
             verbose=1
         )
         
@@ -188,29 +213,38 @@ class ChurnBaselineTrainer:
 
     def _plot_history(self, history) -> None:
         """
-        Helper function untuk visualisasi kurva Loss dan Accuracy.
+        Helper function untuk visualisasi kurva Loss, Accuracy, dan AUC.
         """
         acc = history.history['accuracy']
         val_acc = history.history['val_accuracy']
         loss = history.history['loss']
         val_loss = history.history['val_loss']
+        auc = history.history['auc']
+        val_auc = history.history['val_auc']
         epochs_range = range(len(acc))
 
-        plt.figure(figsize=(12, 5))
+        plt.figure(figsize=(15, 5))
         
         # Plot Accuracy
-        plt.subplot(1, 2, 1)
+        plt.subplot(1, 3, 1)
         plt.plot(epochs_range, acc, label='Training Accuracy')
         plt.plot(epochs_range, val_acc, label='Validation Accuracy')
         plt.legend(loc='lower right')
         plt.title('Training and Validation Accuracy')
         
         # Plot Loss
-        plt.subplot(1, 2, 2)
+        plt.subplot(1, 3, 2)
         plt.plot(epochs_range, loss, label='Training Loss')
         plt.plot(epochs_range, val_loss, label='Validation Loss')
         plt.legend(loc='upper right')
         plt.title('Training and Validation Loss')
+
+        # Plot AUC
+        plt.subplot(1, 3, 3)
+        plt.plot(epochs_range, auc, label='Training AUC')
+        plt.plot(epochs_range, val_auc, label='Validation AUC')
+        plt.legend(loc='lower right')
+        plt.title('Training and Validation AUC')
         
         plt.tight_layout()
         plt.savefig(ModelConfig.HISTORY_PLOT_PATH)
