@@ -29,6 +29,53 @@ SMSML_CalebAnthony/
         └── modelling.py              # Script Modeling yang diadaptasi untuk MLflow
 ```
 
+## 📂 Struktur Project (Detail Hasil setelah Running)
+```
+.
+├── Eksperimen_SML_CalebAnthony
+│   ├── analysis_results
+│   │   ├── 0_descriptive_stats.txt
+│   │   ├── 1_target_distribution.png
+│   │   ├── 2_feature_importance_corr.png
+│   │   ├── 3_payment_trend_analysis.png
+│   │   ├── 4_limit_balance_violin.png
+│   │   ├── 5_demographic_scatter.png
+│   │   ├── 6_numerical_distributions.png
+│   │   ├── 7_categorical_distributions.png
+│   │   ├── 8_correlation_heatmap.png
+│   │   ├── 9_outlier_bill.png
+│   │   └── 9_outlier_pay.png
+│   ├── automate_CalebAnthony.py
+│   ├── churn_preprocessing
+│   │   └── clean_data.csv
+│   ├── churn_raw
+│   │   └── data.csv
+│   ├── eksperimen_CalebAnthony.py
+│   └── requirements.txt
+├── Eksperimen_SML_CalebAnthony.txt
+├── Membangun_model
+│   ├── artifacts
+│   │   ├── baseline_model.h5
+│   │   ├── best_churn_model.h5
+│   │   ├── scaler.pkl
+│   │   ├── scaler_production.pkl
+│   │   └── training_history.png
+│   ├── churn_preprocessing
+│   │   └── clean_data.csv
+│   ├── DagsHub.txt
+│   ├── modelling.py
+│   ├── modelling_tuning.py
+│   └── requirements.txt
+├── README.md
+├── SMSML_CalebAnthony_Colab.ipynb
+└── Workflow-CI
+    ├── MLProject
+    │   ├── conda.yaml
+    │   ├── MLproject
+    │   └── modelling.py
+    └── Workflow-CI.txt
+```
+
 ## 🚀 Cara Menjalankan Project
 
 ### 1. Persiapan Environment
